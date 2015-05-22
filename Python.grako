@@ -1,0 +1,677 @@
+@@comments :: /\#[^\n]*/
+@@eol_comments :: /\#[^\n]*/
+
+@@whitespace :: /[\t \f]+/
+
+
+start
+    =
+    {newline|@:stmt}+
+    ;
+
+
+
+single_input
+    =
+    newline | @:simple_stmt | @:compound_stmt {dedent} newline
+    ;
+
+
+file_input
+    =
+    {NEWLINE | stmt}* $
+    ;
+
+
+eval_input
+    =
+    testlist {NEWLINE}* $
+    ;
+
+
+decorator
+    =
+    '@' name:dotted_name args:{'(' {arglist} ')'} newline
+    ;
+
+
+decorators
+    =
+    decorators:{decorator}+
+    ;
+
+
+decorated
+    =
+    decorators (classdef | funcdef)
+    ;
+
+funcdef
+    =
+    type:'def' name:name params:parameters ':' body:suite
+    ;
+
+
+parameters
+    =
+    '(' @:({varargslist}) ')'
+    ;
+
+varargslist= ({@:fpdef {'=' @:test} ','}*
+              ('*' @:name {',' '**' @:name} | '**' @:name) |
+              @:fpdef {'=' @:test} {',' @:fpdef {'=' @:test}}* {','});
+
+fpdef = name | '(' fplist ')';
+fplist= fpdef {',' fpdef}* {','};
+
+stmt
+    =
+    $ ~ | @:(compound_stmt | simple_stmt)
+    ;
+
+newline=
+    NEWLINE
+    ;
+
+eof = EOF ~;
+
+simple_stmt
+    =
+    statement:small_stmt {';' statement:small_stmt}* {';'} newline {dedent} {eof}
+    ;
+
+
+small_stmt
+    =
+        (print_stmt
+        | expr_stmt
+        | del_stmt
+        | pass_stmt
+        | flow_stmt
+        | import_stmt
+        | global_stmt
+        | exec_stmt
+        | assert_stmt)
+    ;
+
+
+expr_stmt
+    =
+    @:testlist ~ 
+    (
+          @:augassign @:(yield_expr | testlist) ~
+        | {@:'=' @:(yield_expr | testlist)}* ~
+    )
+    ;
+
+
+augassign
+    =
+    (
+          '+='
+        | '-='
+        | '*='
+        | '/='
+        | '%='
+        | '&='
+        | '|='
+        | '^='
+        | '<<='
+        | '>>='
+        | '**='
+        | '//='
+    )
+    ;
+
+
+del_stmt
+    =
+    'del' exprlist
+    ;
+
+print_stmt
+    =
+    @:'print' ( { @+:test {',' @+:test}* {','} } |
+                          @:'>>' @+:test { {',' @+:test}+ {','}} )
+    ;
+
+
+pass_stmt
+    =
+    'pass'
+    ;
+
+
+flow_stmt
+    =
+    break_stmt | continue_stmt | return_stmt | raise_stmt | yield_stmt
+    ;
+
+
+break_stmt
+    =
+    'break'
+    ;
+
+
+continue_stmt
+    =
+    'continue'
+    ;
+
+
+return_stmt
+    =
+    'return' {testlist}
+    ;
+
+
+yield_stmt
+    =
+    yield_expr
+    ;
+
+
+raise_stmt
+    =
+    'raise' {test {'from' test}}
+    ;
+
+
+import_stmt
+    =
+    import_name | import_from
+    ;
+
+
+import_name
+    =
+    'import' dotted_as_names
+    ;
+
+import_from= ('from' ({'.'}* dotted_name | {'.'}+)
+              'import' ('*' | '(' import_as_names ')' | import_as_names));
+
+import_as_name
+    =
+    name {'as' name}
+    ;
+
+
+dotted_as_name
+    =
+    dotted_name {'as' name}
+    ;
+
+
+import_as_names
+    =
+    import_as_name {',' import_as_name}* {','}
+    ;
+
+
+dotted_as_names
+    =
+    dotted_as_name {',' dotted_as_name}*
+    ;
+
+
+dotted_name
+    =
+    @:(NAME {'.' NAME}*)
+    ;
+
+
+global_stmt
+    =
+    'global' name {',' name}*
+    ;
+
+
+exec_stmt
+    =
+    'exec' expr {'in' test {',' test}}
+    ;
+
+
+assert_stmt
+    =
+    'assert' test {',' test}
+    ;
+
+
+compound_stmt
+    =
+    statement:(if_stmt
+    | while_stmt
+    | for_stmt
+    | try_stmt
+    | with_stmt
+    | funcdef
+    | classdef
+    | decorated)
+    ;
+
+
+if_stmt
+    =
+    'if' test ':' suite {'elif' test ':' suite}* {'else' ':' suite}
+    ;
+
+
+while_stmt
+    =
+    'while' test ':' suite {'else' ':' suite}
+    ;
+
+
+for_stmt
+    =
+    'for' exprlist 'in' testlist ':' suite {'else' ':' suite}
+    ;
+
+
+try_stmt
+    =
+    (
+        'try'
+        ':'
+        suite
+        (
+              {except_clause ':' suite}+ {'else' ':' suite} {'finally' ':' suite}
+            | 'finally' ':' suite
+        )
+    )
+    ;
+
+
+with_stmt
+    =
+    'with' items:(with_item {',' with_item}*) ':' body:suite
+    ;
+
+
+with_item
+    =
+    test {'as' expr}
+    ;
+
+
+except_clause
+    =
+    'except' {test {('as' | ',') test}}
+    ;
+
+suite
+    =
+    {newline} indent @:{stmt}+ {dedent} {eof} | @:simple_stmt 
+    ;
+
+testlist_safe= old_test {{',' old_test}+ {','}};
+old_test= or_test | old_lambdef;
+old_lambdef= 'lambda' {varargslist} ':' old_test;
+
+test
+    =
+    @:or_test {'if' @:or_test 'else' @:test} | @:lambdef
+    ;
+
+lambdef
+    =
+    'lambda' {varargslist} ':' test
+    ;
+
+or_test
+    =
+    @:and_test {'or' @:and_test}*
+    ;
+
+
+and_test
+    =
+    (@:not_test {'and' @:not_test}*)
+    ;
+
+
+not_test
+    =
+    'not' @:not_test | @:comparison
+    ;
+
+
+comparison
+    =
+    @:expr {comp_op @:expr}*
+    ;
+
+
+comp_op
+    =
+      '<'
+    | '>'
+    | '=='
+    | '>='
+    | '<='
+    | '<>'
+    | '!='
+    | 'in'
+    | 'not' 'in'
+    | 'is'
+    | 'is' 'not'
+    ;
+
+
+expr
+    =
+    @:xor_expr {'|' @:xor_expr}*
+    ;
+
+
+xor_expr
+    =
+    @:and_expr {'^' @:and_expr}*
+    ;
+
+
+and_expr
+    =
+    @:shift_expr {'&' @:shift_expr}*
+    ;
+
+
+shift_expr
+    =
+    @:arith_expr {('<<' | '>>') @:arith_expr}*
+    ;
+
+
+arith_expr
+    =
+    @:term {('+' | '-') @:term}*
+    ;
+
+
+term
+    =
+    @:factor {('*' | '/' | '%' | '//') @:factor}*
+    ;
+
+
+factor
+    =
+    ('+' | '-' | '~') @:factor | @:power
+    ;
+
+
+power
+    =
+    @:atom {@:trailer} {'**' @:factor}
+    ;
+
+atom= ('(' @:{yield_expr|testlist_comp} ')' |
+       '[' @:{listmaker} ']' |
+       '{' @:{dictorsetmaker} '}' |
+       '`' @:testlist1 '`' |
+       @:name | @:NUMBER | @:{string}+);
+
+listmaker= test ( list_for | {',' test}* {','} );
+
+testlist_comp
+    =
+    test ( comp_for | {',' test}* {','} )
+    ;
+
+
+trailer
+    =
+    '(' {@:arglist} ')' | '[' @:subscriptlist ']' | '.' @:NAME
+    ;
+
+
+subscriptlist
+    =
+    subscript {',' subscript}* {','}
+    ;
+
+subscript= '.' '.' '.' | test | {test} ':' {test} {sliceop};
+
+
+sliceop
+    =
+    ':' {test}
+    ;
+
+
+exprlist
+    =
+    @:expr {',' @:expr}* {','}
+    ;
+
+
+testlist
+    =
+    @:test {',' @:test}* {','}
+    ;
+
+
+dictorsetmaker
+    =
+    (
+          (test ':' test (comp_for | {',' test ':' test}* {','}))
+        | (test (comp_for | {',' test}* {','}))
+    )
+    ;
+
+
+classdef
+    =
+    type:'class' name:name {'(' base_classes:{arglist} ')'} ':' body:suite
+    ;
+
+
+arglist
+    =
+    {@+:argument ','}* (@+:argument {','} | '*' @+:test {',' @+:argument}* {',' '**' @+:test} | '**' @+:test)
+    ;
+
+
+argument
+    =
+    @:test {@:comp_for} | @:test '=' @:test
+    ;
+
+
+list_iter= list_for | list_if;
+list_for= 'for' exprlist 'in' testlist_safe {list_iter};
+list_if= 'if' old_test {list_iter};
+
+comp_iter
+    =
+    comp_for | comp_if
+    ;
+
+
+comp_for
+    =
+    'for' exprlist 'in' or_test {comp_iter}
+    ;
+
+
+comp_if
+    =
+    'if' old_test {comp_iter}
+    ;
+
+testlist1= test {',' test}*;
+
+encoding_decl
+    =
+    name
+    ;
+
+
+yield_expr
+    =
+    'yield' {testlist1}
+    ;
+
+
+NEWLINE
+    =
+    /(\r?\n[\t ]*)+/
+    ;
+
+NUMBER
+    =
+    number:(FLOAT_NUMBER |
+     DEC_NUMBER   |
+     HEX_NUMBER   |
+     OCT_NUMBER   |
+     BIN_NUMBER   |
+     IMAG_NUMBER)
+    ;
+
+term_symbol = STAR|SLASH|PERCENT|DOUBLESLASH ;
+shift_symbol = LEFTSHIFT|RIGHTSHIFT;
+add_symbol = PLUS|MINUS;
+name = NAME;
+string = STRING | LONG_STRING;
+
+I = /(?i)/; # Case insensitive
+S = /(?s)/; # Dot matches newline
+J = /([jJ])/;
+
+LONG_POSTFIX = /[lL]?/;
+EXP_POSTFIX = /[eE][-+]?\d+/;
+DEC_NUMBER = value:/[1-9]\d*(?![.0])/   postfix:LONG_POSTFIX;
+HEX_NUMBER = value:/0[xX][\da-fA-F]*/ postfix:LONG_POSTFIX;
+OCT_NUMBER = value:/0[oO]?(?![bBxX])[0-7]*/  postfix:LONG_POSTFIX;
+FLOAT_NUMBER = value:/(\d+\.\d*|\.\d+)([eE][-+]?\d+)?|\d+[eE][-+]?\d+/;
+IMAG_NUMBER = value:(/\d+/ | FLOAT_NUMBER) postfix:J;
+BIN_NUMBER = value:/0[bB][01]+/ postfix:LONG_POSTFIX;
+STRING_PREFIX = /(u|b|)r?/;
+STRING_INTERNAL = /.\*?(?<!\\)(\\\\)*?/ ;
+QUOTE = "'";
+DBLQUOTE = '"';
+QUOTE3 = "'''";
+DBLQUOTE3 = '"""';
+
+STRING = STRING_PREFIX @:(/"(?!"").*?(?<!\\)(\\\\)*?"/ | /'(?!'').*?(?<!\\)(\\\\)*?'/);
+
+LONG_STRING = S STRING_PREFIX @:(/""".*?(?<!\\)(\\\\)*?(\n)*?"""/ | /'''.*?(?<!\\)(\\\\)*?(\n)*?'''/);
+
+LEFTSHIFTEQUAL = '<<=';
+RIGHTSHIFTEQUAL = '>>=';
+DOUBLESTAREQUAL = '**=';
+DOUBLESLASHEQUAL = '//=';
+
+EQEQUAL = '==';
+NOTEQUAL = '!=|<>';
+LESSEQUAL = '<=';
+LEFTSHIFT = '<<';
+GREATEREQUAL = '>=';
+RIGHTSHIFT = '>>';
+PLUSEQUAL = '+=';
+MINEQUAL = '-=';
+DOUBLESTAR = '**';
+STAREQUAL = '*=';
+DOUBLESLASH = '//';
+SLASHEQUAL = '/=';
+VBAREQUAL = '|=';
+PERCENTEQUAL = '%=';
+AMPEREQUAL = '&=';
+CIRCUMFLEXEQUAL = '^=';
+
+COLON = ':';
+COMMA = ',';
+SEMI = ';';
+PLUS = '+';
+MINUS = '-';
+STAR = '*';
+SLASH = '/';
+VBAR = '|';
+AMPER = '&';
+
+LESS = '<';
+GREATER = '>';
+EQUAL = '=';
+DOT = '.';
+PERCENT = '%';
+BACKQUOTE = '`';
+CIRCUMFLEX = '^';
+TILDE = '~';
+AT = '@';
+
+LPAR = '(';
+RPAR = ')';
+LBRACE = '{';
+RBRACE = '}';
+LSQB = '[';
+RSQB = ']';
+
+PRINT = 'print';
+IMPORT = 'import';
+FROM = 'from';
+GLOBAL = 'global';
+EXEC = 'exec';
+ASSERT = 'assert';
+DEL = 'del';
+AS = 'as';
+LAMBDA = 'lambda';
+
+# Definitions
+DEF = 'def';
+CLASS = 'class';
+
+# Flow Blocks
+TRY = 'try';
+EXCEPT = 'except';
+FINALLY = 'finally';
+IF = 'if';
+ELIF = 'elif';
+ELSE = 'else';
+FOR = 'for';
+WHILE = 'while';
+WITH = 'with';
+
+# Flow
+BREAK = 'break';
+CONTINUE = 'continue';
+RETURN = 'return';
+YIELD = 'yield';
+RAISE = 'raise';
+PASS = 'pass';
+
+# Operators
+AND = 'and';
+OR = 'or';
+NOT = 'not';
+IS = 'is';
+IN = 'in';
+
+NAME
+    =
+    /[a-zA-Z_]\w*/
+    ;
+
+EOF
+    =
+    '<EOF>' $ ~
+    ;
+
+indent =
+    INDENT
+    ;
+dedent =
+    DEDENT
+    ;
+
+INDENT
+    =
+    '<INDENT>'
+    ;
+
+DEDENT
+    =
+    '<DEDENT>'
+    ;
